@@ -1,10 +1,9 @@
 name: Daily Weather Scraper
 on:
+  workflow_dispatch:
   schedule:
-    - cron: '0 11 * * *'  # Runs automatically at 6:00 AM Central Time
-  workflow_dispatch:     # Adds the manual run button
+    - cron: '0 11 * * *'
 
-# This is the missing security key that forces GitHub to allow file saving
 permissions:
   contents: write
 
@@ -13,25 +12,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
       - name: Fetch Data
         run: |
-          # 1. Download raw weather metrics safely via cloud tools
           curl -s "https://open-meteo.com" > raw.json
-          
-          # 2. Build the CSV file if it is missing
-          if [ ! -f weather_archive.csv ]; then 
-            echo "scrape_date,max_temp,min_temp" > weather_archive.csv
-          fi
-          
-          # 3. Pull the specific data values out of the text response
+          if [ ! -f weather_archive.csv ]; then echo "scrape_date,max_temp,min_temp" > weather_archive.csv; fi
           echo "$(date +'%Y-%m-%d'),$(grep -o '"temperature_2m_max":\[[^]]*\]' raw.json | cut -d'[' -f2 | cut -d',' -f1),$(grep -o '"temperature_2m_min":\[[^]]*\]' raw.json | cut -d'[' -f2 | cut -d',' -f1)" >> weather_archive.csv
-          
-      - name: Save Spreadsheet to Account
+      - name: Save
         run: |
           git config --global user.name "Automation"
           git config --global user.email "actions@github.com"
           git add weather_archive.csv
           git commit -m "sync" || exit 0
           git push
-Use code with caution.
