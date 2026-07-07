@@ -2,7 +2,7 @@ name: Daily Weather Scraper
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 11 * * *'
+    - cron: '0 11 * * *'  # Automatically runs every single day at 6:00 AM Central Time
 
 permissions:
   contents: write
@@ -12,15 +12,50 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Fetch Data
+
+      - name: Load R Environment
+        uses: r-lib/actions/setup-r@v2
+
+      - name: Fetch and Process 10-Day Forecast
         run: |
-          curl -s "https://open-meteo.com" > raw.json
-          if [ ! -f weather_archive.csv ]; then echo "scrape_date,max_temp,min_temp" > weather_archive.csv; fi
-          echo "$(date +'%Y-%m-%d'),$(grep -o '"temperature_2m_max":\[[^]]*\]' raw.json | cut -d'[' -f2 | cut -d',' -f1),$(grep -o '"temperature_2m_min":\[[^]]*\]' raw.json | cut -d'[' -f2 | cut -d',' -f1)" >> weather_archive.csv
-      - name: Save
+          cat << 'EOF' > run_10day.R
+          # 1. Use the explicit 10-day window endpoint from Open-Meteo
+          url <- "https://open-meteo.com"
+          lines <- readLines(url, warn = FALSE)
+          
+          # 2. Safely parse data text patterns using standard Base R vector slicing
+          dates_raw <- regmatches(lines, regexpr('(?<="time":\\[)[^]]+', lines, perl=TRUE))
+          maxs_raw  <- regmatches(lines, regexpr('(?<="temperature_2m_max":\\[)[^]]+', lines, perl=TRUE))
+          mins_raw  <- regmatches(lines, regexpr('(?<="temperature_2m_min":\\[)[^]]+', lines, perl=TRUE))
+          
+          # 3. Clean up formatting and parse strings into pure data tables
+          dates <- gsub('"', '', unlist(strsplit(dates_raw, ",")))
+          maxs  <- as.numeric(unlist(strsplit(maxs_raw, ",")))
+          mins  <- as.numeric(unlist(strsplit(mins_raw, ",")))
+          
+          # 4. Construct the comprehensive 10-day tracker database frame
+          forecast_df <- data.frame(
+            scrape_date   = Sys.Date(),
+            forecast_date = dates,
+            max_temp_f    = maxs,
+            min_temp_f    = mins
+          )
+          
+          # 5. Append or build the archive spreadsheet file
+          file_name <- "weather_archive.csv"
+          if (file.exists(file_name)) {
+            write.table(forecast_df, file = file_name, append = TRUE, sep = ",", row.names = FALSE, col.names = FALSE)
+          } else {
+            write.csv(forecast_df, file = file_name, row.names = FALSE)
+          }
+          print("Successfully appended 10 days of forecast records!")
+          EOF
+          Rscript run_10day.R
+
+      - name: Save Spreadsheet to Account
         run: |
           git config --global user.name "Automation"
           git config --global user.email "actions@github.com"
           git add weather_archive.csv
-          git commit -m "sync" || exit 0
+          git commit -m "Expand tracking database matrix to a full 10-day scope" || exit 0
           git push
