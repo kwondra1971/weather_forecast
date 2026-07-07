@@ -19,21 +19,21 @@ jobs:
       - name: Fetch and Process 10-Day Forecast
         run: |
           cat << 'EOF' > run_10day.R
-          # Use the explicit 10-day data window for your location
+          # Use the explicit 10-day data window for your location coordinates
           url <- "https://open-meteo.com"
           lines <- readLines(url, warn = FALSE)
           
-          # Isolate text data arrays using text pattern matching
+          # Isolate specific data arrays using text pattern matching models
           dates_raw <- regmatches(lines, regexpr('(?<="time":\\[)[^]]+', lines, perl=TRUE))
           maxs_raw  <- regmatches(lines, regexpr('(?<="temperature_2m_max":\\[)[^]]+', lines, perl=TRUE))
           mins_raw  <- regmatches(lines, regexpr('(?<="temperature_2m_min":\\[)[^]]+', lines, perl=TRUE))
           
-          # Convert strings into clean individual columns
+          # Clear out layout characters and structure into data arrays
           dates <- gsub('"', '', unlist(strsplit(dates_raw, ",")))
           maxs  <- as.numeric(unlist(strsplit(maxs_raw, ",")))
           mins  <- as.numeric(unlist(strsplit(mins_raw, ",")))
           
-          # Structure into a 10-row dataset layout
+          # Structure data records into a clean 10-row data frame
           forecast_df <- data.frame(
             scrape_date   = Sys.Date(),
             forecast_date = dates,
@@ -47,7 +47,7 @@ jobs:
           } else {
             write.csv(forecast_df, file = file_name, row.names = FALSE)
           }
-          print("Successfully logged 10 days of weather data!")
+          print("Successfully logged 10 days of weather records!")
           EOF
           Rscript run_10day.R
 
@@ -56,5 +56,5 @@ jobs:
           git config --global user.name "Automation"
           git config --global user.email "actions@github.com"
           git add weather_archive.csv
-          git commit -m "Fix database structure and pull full 10-day matrix" || exit 0
+          git commit -m "Fix layout array matching to track full 10-day matrix" || exit 0
           git push
