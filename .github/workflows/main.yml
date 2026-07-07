@@ -1,53 +1,22 @@
 name: Daily Weather Scraper
-
 on:
   schedule:
-    - cron: '0 11 * * *'  # Runs automatically at 6:00 AM Central Time
-  workflow_dispatch:     # Trigger button
-
+    - cron: '0 11 * * *'
+  workflow_dispatch:
 jobs:
   run-scraper:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repo files
-        uses: actions/checkout@v4
-
-      - name: Load R Environment
-        uses: r-lib/actions/setup-r@v2
-
-      - name: Run Weather Script Without Libraries
+      - uses: actions/checkout@v4
+      - name: Fetch Data
         run: |
-          # This writes a clean, package-free script directly into the server
-          cat << 'EOF' > run_clean.R
-          url <- "https://open-meteo.com"
-          lines <- readLines(url, warn = FALSE)
-          
-          # Use basic text matching to extract values without requiring heavy packages
-          max_t <- regmatches(lines, regexpr('(?<="temperature_2m_max":\\[)[0-9.]+', lines, perl=TRUE))
-          min_t <- regmatches(lines, regexpr('(?<="temperature_2m_min":\\[)[0-9.]+', lines, perl=TRUE))
-          rain  <- regmatches(lines, regexpr('(?<="rain_sum":\\[)[0-9.]+', lines, perl=TRUE))
-          
-          forecast_df <- data.frame(
-            scrape_date   = Sys.Date(),
-            forecast_date = Sys.Date(),
-            max_temp_f    = as.numeric(max_t),
-            min_temp_f    = as.numeric(min_t),
-            predicted_rain_in = round(as.numeric(rain) / 25.4, 2)
-          )
-          
-          file_name <- "weather_archive.csv"
-          if (file.exists(file_name)) {
-            write.table(forecast_df, file = file_name, append = TRUE, sep = ",", row.names = FALSE, col.names = FALSE)
-          } else {
-            write.csv(forecast_df, file = file_name, row.names = FALSE)
-          }
-          EOF
-          Rscript run_clean.R
-
-      - name: Save CSV data to account
+          curl -s "https://open-meteo.com" > raw.json
+          if [ ! -f weather_archive.csv ]; then echo "scrape_date,max_temp,min_temp" > weather_archive.csv; fi
+          echo "$(date +'%Y-%m-%d'),$(grep -o '"temperature_2m_max":\[[^]]*\]' raw.json | cut -d'[' -f2 | cut -d',' -f1),$(grep -o '"temperature_2m_min":\[[^]]*\]' raw.json | cut -d'[' -f2 | cut -d',' -f1)" >> weather_archive.csv
+      - name: Save
         run: |
-          git config --global user.name "GitHub Automation Bot"
+          git config --global user.name "Automation"
           git config --global user.email "actions@github.com"
           git add weather_archive.csv
-          git commit -m "Automated data sync" || exit 0
+          git commit -m "sync" || exit 0
           git push
