@@ -19,21 +19,21 @@ jobs:
       - name: Fetch and Process 10-Day Forecast
         run: |
           cat << 'EOF' > run_10day.R
-          # 1. Use the explicit 10-day window endpoint from Open-Meteo
+          # Use the explicit 10-day data coordinates window for your location
           url <- "https://open-meteo.com"
           lines <- readLines(url, warn = FALSE)
           
-          # 2. Safely parse data text patterns using standard Base R vector slicing
+          # Isolate hidden text data arrays using text pattern matching
           dates_raw <- regmatches(lines, regexpr('(?<="time":\\[)[^]]+', lines, perl=TRUE))
           maxs_raw  <- regmatches(lines, regexpr('(?<="temperature_2m_max":\\[)[^]]+', lines, perl=TRUE))
           mins_raw  <- regmatches(lines, regexpr('(?<="temperature_2m_min":\\[)[^]]+', lines, perl=TRUE))
           
-          # 3. Clean up formatting and parse strings into pure data tables
+          # Convert strings into clean individual columns
           dates <- gsub('"', '', unlist(strsplit(dates_raw, ",")))
           maxs  <- as.numeric(unlist(strsplit(maxs_raw, ",")))
           mins  <- as.numeric(unlist(strsplit(mins_raw, ",")))
           
-          # 4. Construct the comprehensive 10-day tracker database frame
+          # Structure into a 10-row dataset layout
           forecast_df <- data.frame(
             scrape_date   = Sys.Date(),
             forecast_date = dates,
@@ -41,14 +41,13 @@ jobs:
             min_temp_f    = mins
           )
           
-          # 5. Append or build the archive spreadsheet file
           file_name <- "weather_archive.csv"
           if (file.exists(file_name)) {
             write.table(forecast_df, file = file_name, append = TRUE, sep = ",", row.names = FALSE, col.names = FALSE)
           } else {
             write.csv(forecast_df, file = file_name, row.names = FALSE)
           }
-          print("Successfully appended 10 days of forecast records!")
+          print("Successfully logged 10 days of weather data!")
           EOF
           Rscript run_10day.R
 
@@ -57,5 +56,5 @@ jobs:
           git config --global user.name "Automation"
           git config --global user.email "actions@github.com"
           git add weather_archive.csv
-          git commit -m "Expand tracking database matrix to a full 10-day scope" || exit 0
+          git commit -m "Fix database structure and pull full 10-day matrix" || exit 0
           git push
